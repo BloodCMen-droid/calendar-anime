@@ -20,11 +20,13 @@ const firebaseConfig = {
 
 // ── CLOUDINARY CONFIG ──
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/imgapi/image/upload';
-const CLOUDINARY_UPLOAD_PRESET = 'anime_tracker'; // Create this preset in Cloudinary as "unsigned"
+const CLOUDINARY_UPLOAD_PRESET = 'gym_preset'; // Your working preset
+const USE_CLOUDINARY = true; // Enabled with correct credentials
 
-// If preset doesn't work, you can use this alternative (requires API key/secret on backend)
-// const CLOUDINARY_API_KEY = 'your_api_key';
-// const CLOUDINARY_API_SECRET = 'your_api_secret';
+function optimizarUrlCloudinary(url) {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/w_800,h_800,c_fill,g_auto,f_webp,q_auto/');
+}
 
 // Initialize Firebase
 let app, database;
@@ -43,6 +45,7 @@ let editingId = null;
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
+  removeDuplicates();
   renderAll();
   setupEventListeners();
 });
@@ -60,21 +63,26 @@ async function loadData() {
         id: key,
         ...data[key]
       }));
-    } else {
-      animes = [];
+      return; // Firebase has data, use it
     }
   } catch (error) {
     console.error('Error loading data from Firebase:', error);
-    // Fallback to local JSON if Firebase fails
-    try {
-      const cachebustedUrl = `./data/animes.json?v=${new Date().getTime()}`;
-      const res = await fetch(cachebustedUrl);
-      if (res.ok) {
-        animes = await res.json();
-      }
-    } catch (e) {
+  }
+
+  // Firebase empty or failed, load from local JSON
+  try {
+    const cachebustedUrl = `./data/animes.json?v=${new Date().getTime()}`;
+    const res = await fetch(cachebustedUrl);
+    if (res.ok) {
+      animes = await res.json();
+      console.log('Loaded data from local JSON:', animes.length, 'animes');
+    } else {
+      console.warn('Could not load local JSON');
       animes = [];
     }
+  } catch (e) {
+    console.error('Error loading local JSON:', e);
+    animes = [];
   }
 }
 
@@ -85,7 +93,23 @@ function saveToLocalStorage() {
   }));
 }
 
+function removeDuplicates() {
+  const seen = new Set();
+  animes = animes.filter(anime => {
+    if (!anime.id) return true; // Keep animes without ID for now
+    if (seen.has(anime.id)) {
+      console.warn('Removed duplicate anime:', anime.id);
+      return false;
+    }
+    seen.add(anime.id);
+    return true;
+  });
+}
+
 async function saveData() {
+  removeDuplicates();
+  saveToLocalStorage();
+  
   try {
     const animesRef = database.ref('animes');
     const animesObject = {};
@@ -96,8 +120,6 @@ async function saveData() {
     await animesRef.set(animesObject);
   } catch (error) {
     console.error('Error saving to Firebase:', error);
-    // Fallback to localStorage
-    saveToLocalStorage();
   }
 }
 
@@ -152,8 +174,8 @@ async function migrateDataToFirebase() {
 }
 
 function generateId() {
-  const newRef = database.ref('animes').push();
-  return newRef.key;
+  // Generate local ID without Firebase push to avoid duplicates
+  return `anime_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 // ── DATE / WEEK UTILS ──
@@ -338,10 +360,12 @@ function buildCoverFallbackSvg(title, color) {
 }
 
 function getCoverSrc(anime) {
+  if (anime.coverUrl && anime.coverUrl.trim()) {
+    return optimizarUrlCloudinary(anime.coverUrl.trim());
+  }
   if (anime.coverPath && anime.coverPath.trim()) return anime.coverPath.trim();
   if (anime.portada && anime.portada.trim()) return anime.portada.trim();
   if (anime.foto && anime.foto.trim()) return anime.foto.trim();
-  if (anime.coverUrl && anime.coverUrl.trim()) return anime.coverUrl.trim();
   return buildCoverFallbackSvg(anime.title, anime.color);
 }
 
@@ -402,8 +426,8 @@ function renderAnimeList() {
         </div>
       </div>
       <div class="item-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openEditModal(${anime.id})">✎</button>
-        <button class="btn btn-danger btn-sm" onclick="confirmDelete(${anime.id})">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${anime.id}')">✎</button>
+        <button class="btn btn-danger btn-sm" onclick="confirmDelete('${anime.id}')">✕</button>
       </div>
     `;
 
@@ -483,40 +507,35 @@ async function saveAnime() {
 
   const coverFieldValue = document.getElementById('field-cover').value.trim();
   const coverFile = document.getElementById('field-cover-file').files[0];
-  let coverUrl = coverFieldValue;
+  let coverUrl = '';
   let coverPath = '';
 
-  // Handle image upload to Cloudinary
-  if (coverFile) {
+  // Si ingresó URL manual, usarla
+  if (coverFieldValue) {
+    if (coverFieldValue.startsWith('./portadas/') || coverFieldValue.startsWith('portadas/')) {
+      coverPath = coverFieldValue;
+    } else {
+      coverUrl = coverFieldValue;
+    }
+  }
+  // Si seleccionó archivo y Cloudinary está habilitado
+  else if (coverFile && USE_CLOUDINARY) {
     try {
       showToast('Subiendo imagen...', 'info');
       coverUrl = await uploadImageToCloudinary(coverFile);
-      coverPath = '';
       showToast('Imagen subida ✓', 'success');
     } catch (error) {
-      showToast('Error al subir imagen: ' + error.message + '. Usando URL manual.', 'error');
-      // If Cloudinary fails, use the manual URL field if provided
-      if (coverFieldValue) {
-        coverUrl = coverFieldValue;
-      } else {
-        coverUrl = ''; // No image
-      }
-      return; // Don't save if image upload failed and no manual URL
+      showToast('Error al subir imagen: ' + error.message, 'error');
+      return;
     }
-  } else if (editingId) {
-    const existing = animes.find(a => a.id === editingId);
+  }
+  // Si está editando y no ingresó nada nuevo, preservar anterior
+  else if (editingId) {
+    const existing = animes.find(a => a.id == editingId);
     if (existing) {
-      if (!coverFieldValue) {
-        coverUrl = existing.coverUrl || '';
-        coverPath = existing.coverPath || '';
-      } else if (coverFieldValue.startsWith('./portadas/') || coverFieldValue.startsWith('portadas/')) {
-        coverPath = coverFieldValue;
-      } else {
-        coverPath = '';
-      }
+      coverUrl = existing.coverUrl || '';
+      coverPath = existing.coverPath || '';
     }
-  } else if (coverFieldValue.startsWith('./portadas/') || coverFieldValue.startsWith('portadas/')) {
-    coverPath = coverFieldValue;
   }
 
   const data = {
@@ -533,9 +552,10 @@ async function saveAnime() {
   };
 
   if (editingId) {
-    const idx = animes.findIndex(a => a.id === editingId);
+    const idx = animes.findIndex(a => a.id == editingId);
     if (idx !== -1) {
-      animes[idx] = { ...animes[idx], ...data };
+      data.id = editingId; // Preserve the ID
+      animes[idx] = { ...data };
       showToast('Anime actualizado ✓', 'success');
     }
   } else {
@@ -551,11 +571,11 @@ async function saveAnime() {
 
 // ── DELETE ──
 async function confirmDelete(id) {
-  const anime = animes.find(a => a.id === id);
+  const anime = animes.find(a => a.id == id);
   if (!anime) return;
   if (!confirm(`¿Eliminar "${anime.title}"?`)) return;
 
-  animes = animes.filter(a => a.id !== id);
+  animes = animes.filter(a => a.id != id);
 
   // Delete from Firebase
   try {
