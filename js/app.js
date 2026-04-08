@@ -30,7 +30,7 @@ const CLOUDINARY_UPLOAD_PRESET = 'anime_tracker'; // Create this preset in Cloud
 let app, database;
 try {
   app = firebase.initializeApp(firebaseConfig);
-  database = firebase.getDatabase(app);
+  database = firebase.database();
 } catch (error) {
   console.error('Firebase initialization error:', error);
 }
@@ -50,8 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ── DATA MANAGEMENT ──
 async function loadData() {
   try {
-    const animesRef = firebase.ref(database, 'animes');
-    const snapshot = await firebase.get(animesRef);
+    const animesRef = database.ref('animes');
+    const snapshot = await animesRef.get();
 
     if (snapshot.exists()) {
       const data = snapshot.val();
@@ -87,13 +87,13 @@ function saveToLocalStorage() {
 
 async function saveData() {
   try {
-    const animesRef = window.firebase.ref(database, 'animes');
+    const animesRef = database.ref('animes');
     const animesObject = {};
     animes.forEach(anime => {
       animesObject[anime.id] = { ...anime };
       delete animesObject[anime.id].id; // Remove id from data since it's the key
     });
-    await firebase.set(animesRef, animesObject);
+    await animesRef.set(animesObject);
   } catch (error) {
     console.error('Error saving to Firebase:', error);
     // Fallback to localStorage
@@ -136,13 +136,13 @@ async function migrateDataToFirebase() {
     const res = await fetch(cachebustedUrl);
     if (res.ok) {
       const localAnimes = await res.json();
-      const animesRef = firebase.ref(database, 'animes');
+      const animesRef = database.ref('animes');
       const animesObject = {};
       localAnimes.forEach(anime => {
         const id = generateId();
         animesObject[id] = { ...anime, id };
       });
-      await firebase.set(animesRef, animesObject);
+      await animesRef.set(animesObject);
       showToast('Datos migrados a Firebase ✓', 'success');
     }
   } catch (error) {
@@ -152,7 +152,7 @@ async function migrateDataToFirebase() {
 }
 
 function generateId() {
-  const newRef = firebase.push(firebase.ref(database, 'animes'));
+  const newRef = database.ref('animes').push();
   return newRef.key;
 }
 
@@ -559,8 +559,8 @@ async function confirmDelete(id) {
 
   // Delete from Firebase
   try {
-    const animeRef = firebase.ref(database, `animes/${id}`);
-    await firebase.remove(animeRef);
+    const animeRef = database.ref(`animes/${id}`);
+    await animeRef.remove();
   } catch (error) {
     console.error('Error deleting from Firebase:', error);
   }
