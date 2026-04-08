@@ -39,7 +39,8 @@ async function loadData() {
 
   // 2. Try loading from data/animes.json
   try {
-    const res = await fetch('./data/animes.json');
+    const cachebustedUrl = `./data/animes.json?v=${new Date().getTime()}`;
+    const res = await fetch(cachebustedUrl);
     if (res.ok) {
       animes = await res.json();
       saveToLocalStorage();
