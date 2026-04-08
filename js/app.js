@@ -20,13 +20,17 @@ const firebaseConfig = {
 
 // ── CLOUDINARY CONFIG ──
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/imgapi/image/upload';
-const CLOUDINARY_UPLOAD_PRESET = 'anime_tracker'; // You'll need to create this preset in Cloudinary
+const CLOUDINARY_UPLOAD_PRESET = 'anime_tracker'; // Create this preset in Cloudinary as "unsigned"
+
+// If preset doesn't work, you can use this alternative (requires API key/secret on backend)
+// const CLOUDINARY_API_KEY = 'your_api_key';
+// const CLOUDINARY_API_SECRET = 'your_api_secret';
 
 // Initialize Firebase
 let app, database;
 try {
-  app = window.firebase.initializeApp(firebaseConfig);
-  database = window.firebase.getDatabase(app);
+  app = firebase.initializeApp(firebaseConfig);
+  database = firebase.getDatabase(app);
 } catch (error) {
   console.error('Firebase initialization error:', error);
 }
@@ -46,8 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ── DATA MANAGEMENT ──
 async function loadData() {
   try {
-    const animesRef = window.firebase.ref(database, 'animes');
-    const snapshot = await window.firebase.get(animesRef);
+    const animesRef = firebase.ref(database, 'animes');
+    const snapshot = await firebase.get(animesRef);
 
     if (snapshot.exists()) {
       const data = snapshot.val();
@@ -89,7 +93,7 @@ async function saveData() {
       animesObject[anime.id] = { ...anime };
       delete animesObject[anime.id].id; // Remove id from data since it's the key
     });
-    await window.firebase.set(animesRef, animesObject);
+    await firebase.set(animesRef, animesObject);
   } catch (error) {
     console.error('Error saving to Firebase:', error);
     // Fallback to localStorage
@@ -111,7 +115,9 @@ async function uploadImageToCloudinary(file) {
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      const errorData = await response.text();
+      console.error('Cloudinary error response:', errorData);
+      throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -130,13 +136,13 @@ async function migrateDataToFirebase() {
     const res = await fetch(cachebustedUrl);
     if (res.ok) {
       const localAnimes = await res.json();
-      const animesRef = window.firebase.ref(database, 'animes');
+      const animesRef = firebase.ref(database, 'animes');
       const animesObject = {};
       localAnimes.forEach(anime => {
         const id = generateId();
         animesObject[id] = { ...anime, id };
       });
-      await window.firebase.set(animesRef, animesObject);
+      await firebase.set(animesRef, animesObject);
       showToast('Datos migrados a Firebase ✓', 'success');
     }
   } catch (error) {
@@ -146,7 +152,7 @@ async function migrateDataToFirebase() {
 }
 
 function generateId() {
-  const newRef = window.firebase.push(window.firebase.ref(database, 'animes'));
+  const newRef = firebase.push(firebase.ref(database, 'animes'));
   return newRef.key;
 }
 
@@ -488,8 +494,14 @@ async function saveAnime() {
       coverPath = '';
       showToast('Imagen subida ✓', 'success');
     } catch (error) {
-      showToast('Error al subir imagen: ' + error.message, 'error');
-      return;
+      showToast('Error al subir imagen: ' + error.message + '. Usando URL manual.', 'error');
+      // If Cloudinary fails, use the manual URL field if provided
+      if (coverFieldValue) {
+        coverUrl = coverFieldValue;
+      } else {
+        coverUrl = ''; // No image
+      }
+      return; // Don't save if image upload failed and no manual URL
     }
   } else if (editingId) {
     const existing = animes.find(a => a.id === editingId);
@@ -547,8 +559,8 @@ async function confirmDelete(id) {
 
   // Delete from Firebase
   try {
-    const animeRef = window.firebase.ref(database, `animes/${id}`);
-    await window.firebase.remove(animeRef);
+    const animeRef = firebase.ref(database, `animes/${id}`);
+    await firebase.remove(animeRef);
   } catch (error) {
     console.error('Error deleting from Firebase:', error);
   }
