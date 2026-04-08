@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ANIME TRACKER // SEASON 2025</title>
   <link rel="stylesheet" href="./css/style.css">
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, get, set, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    window.firebase = { initializeApp, getDatabase, ref, get, set, push, update, remove };
+  </script>
 </head>
 <body>
 
@@ -21,7 +29,8 @@
 
       <div class="header-actions">
         <button class="btn btn-ghost btn-sm" onclick="goToCurrentWeek()">HOY</button>
-        <button class="btn btn-ghost btn-sm" onclick="resetAndReload()" title="Recargar datos del JSON">↺</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetAndReload()" title="Recargar datos de Firebase">↺</button>
+        <button class="btn btn-ghost btn-sm" onclick="migrateDataToFirebase()" title="Migrar datos locales a Firebase">↑</button>
         <button class="btn btn-neon" onclick="openAddModal()">+ AGREGAR</button>
       </div>
     </div>

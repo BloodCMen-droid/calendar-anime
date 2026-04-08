@@ -7,6 +7,30 @@ const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','satur
 const DAY_LABELS = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
 const DAY_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
+// ── FIREBASE CONFIG ──
+const firebaseConfig = {
+  apiKey: "AIzaSyB7pfqOMBPFf3XfRxY2zmHLCLaB4HHi7Fk",
+  authDomain: "calendar-anime.firebaseapp.com",
+  databaseURL: "https://calendar-anime-default-rtdb.firebaseio.com",
+  projectId: "calendar-anime",
+  storageBucket: "calendar-anime.firebasestorage.app",
+  messagingSenderId: "1029635699596",
+  appId: "1:1029635699596:web:338a7a0ae4a23351b85ca9"
+};
+
+// ── CLOUDINARY CONFIG ──
+const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/imgapi/image/upload';
+const CLOUDINARY_UPLOAD_PRESET = 'anime_tracker'; // You'll need to create this preset in Cloudinary
+
+// Initialize Firebase
+let app, database;
+try {
+  app = window.firebase.initializeApp(firebaseConfig);
+  database = window.firebase.getDatabase(app);
+} catch (error) {
+  console.error('Firebase initialization error:', error);
+}
+
 // ── STATE ──
 let animes = [];
 let currentWeekOffset = 0; // 0 = current week
@@ -21,34 +45,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ── DATA MANAGEMENT ──
 async function loadData() {
-  // 1. Try localStorage first (fastest)
-  const lsData = localStorage.getItem(STORAGE_KEY);
-  if (lsData) {
-    try {
-      const parsed = JSON.parse(lsData);
-      if (parsed && parsed.version === DATA_VERSION && Array.isArray(parsed.animes)) {
-        animes = parsed.animes;
-        return;
-      }
-      if (Array.isArray(parsed)) {
-        animes = parsed;
-        return;
-      }
-    } catch (e) { /* fall through */ }
-  }
-
-  // 2. Try loading from data/animes.json
   try {
-    const cachebustedUrl = `./data/animes.json?v=${new Date().getTime()}`;
-    const res = await fetch(cachebustedUrl);
-    if (res.ok) {
-      animes = await res.json();
-      saveToLocalStorage();
-      return;
-    }
-  } catch (e) { /* file not found locally */ }
+    const animesRef = window.firebase.ref(database, 'animes');
+    const snapshot = await window.firebase.get(animesRef);
 
-  animes = [];
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      // Convert Firebase object to array
+      animes = Object.keys(data).map(key => ({
+        id: key,
+        ...data[key]
+      }));
+    } else {
+      animes = [];
+    }
+  } catch (error) {
+    console.error('Error loading data from Firebase:', error);
+    // Fallback to local JSON if Firebase fails
+    try {
+      const cachebustedUrl = `./data/animes.json?v=${new Date().getTime()}`;
+      const res = await fetch(cachebustedUrl);
+      if (res.ok) {
+        animes = await res.json();
+      }
+    } catch (e) {
+      animes = [];
+    }
+  }
 }
 
 function saveToLocalStorage() {
@@ -59,24 +82,72 @@ function saveToLocalStorage() {
 }
 
 async function saveData() {
-  // Always save to localStorage
-  saveToLocalStorage();
-
-  // Attempt to save to server/file (works in Node/Electron; fails silently in browser-only)
   try {
-    const res = await fetch('./save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(animes, null, 2)
+    const animesRef = window.firebase.ref(database, 'animes');
+    const animesObject = {};
+    animes.forEach(anime => {
+      animesObject[anime.id] = { ...anime };
+      delete animesObject[anime.id].id; // Remove id from data since it's the key
     });
-    if (!res.ok) throw new Error();
-  } catch {
-    // Silently fail - localStorage is the main store for browser use
+    await window.firebase.set(animesRef, animesObject);
+  } catch (error) {
+    console.error('Error saving to Firebase:', error);
+    // Fallback to localStorage
+    saveToLocalStorage();
+  }
+}
+
+// ── CLOUDINARY IMAGE UPLOAD ──
+async function uploadImageToCloudinary(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  formData.append('folder', 'anime_tracker'); // Create folder for anime images
+
+  try {
+    const response = await fetch(CLOUDINARY_URL, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.secure_url; // Return the uploaded image URL
+  } catch (error) {
+    console.error('Error uploading to Cloudinary:', error);
+    throw error;
+  }
+}
+
+// ── MIGRATE EXISTING DATA TO FIREBASE ──
+async function migrateDataToFirebase() {
+  try {
+    // Load from local JSON first
+    const cachebustedUrl = `./data/animes.json?v=${new Date().getTime()}`;
+    const res = await fetch(cachebustedUrl);
+    if (res.ok) {
+      const localAnimes = await res.json();
+      const animesRef = window.firebase.ref(database, 'animes');
+      const animesObject = {};
+      localAnimes.forEach(anime => {
+        const id = generateId();
+        animesObject[id] = { ...anime, id };
+      });
+      await window.firebase.set(animesRef, animesObject);
+      showToast('Datos migrados a Firebase ✓', 'success');
+    }
+  } catch (error) {
+    console.error('Error migrating data:', error);
+    showToast('Error al migrar datos', 'error');
   }
 }
 
 function generateId() {
-  return Date.now() + Math.floor(Math.random() * 1000);
+  const newRef = window.firebase.push(window.firebase.ref(database, 'animes'));
+  return newRef.key;
 }
 
 // ── DATE / WEEK UTILS ──
@@ -409,9 +480,17 @@ async function saveAnime() {
   let coverUrl = coverFieldValue;
   let coverPath = '';
 
+  // Handle image upload to Cloudinary
   if (coverFile) {
-    coverUrl = await fileToDataUrl(coverFile);
-    coverPath = '';
+    try {
+      showToast('Subiendo imagen...', 'info');
+      coverUrl = await uploadImageToCloudinary(coverFile);
+      coverPath = '';
+      showToast('Imagen subida ✓', 'success');
+    } catch (error) {
+      showToast('Error al subir imagen: ' + error.message, 'error');
+      return;
+    }
   } else if (editingId) {
     const existing = animes.find(a => a.id === editingId);
     if (existing) {
@@ -465,7 +544,15 @@ async function confirmDelete(id) {
   if (!confirm(`¿Eliminar "${anime.title}"?`)) return;
 
   animes = animes.filter(a => a.id !== id);
-  await saveData();
+
+  // Delete from Firebase
+  try {
+    const animeRef = window.firebase.ref(database, `animes/${id}`);
+    await window.firebase.remove(animeRef);
+  } catch (error) {
+    console.error('Error deleting from Firebase:', error);
+  }
+
   renderAll();
   showToast('Anime eliminado', 'info');
 }
@@ -501,15 +588,6 @@ function showToast(msg, type = 'info') {
 }
 
 // ── HELPERS ──
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -546,19 +624,20 @@ function setupEventListeners() {
 
 // ── RESET & RELOAD FROM JSON ──
 async function resetAndReload() {
-  if (!confirm('¿Recargar todos los datos desde animes.json? Se perderán cambios no guardados.')) return;
+  if (!confirm('¿Recargar todos los datos desde Firebase? Se perderán cambios no guardados.')) return;
   localStorage.removeItem(STORAGE_KEY);
   // Also clear old versions
   localStorage.removeItem('animeTracker_v2');
   localStorage.removeItem('animeTracker_v1');
   await loadData();
   renderAll();
-  showToast('Datos recargados desde JSON ✓', 'success');
+  showToast('Datos recargados desde Firebase ✓', 'success');
 }
 
 // Expose globals for inline HTML handlers
 window.openAddModal = openAddModal;
 window.resetAndReload = resetAndReload;
+window.migrateDataToFirebase = migrateDataToFirebase;
 window.openEditModal = openEditModal;
 window.closeModal = closeModal;
 window.saveAnime = saveAnime;
