@@ -131,4 +131,16 @@
     "coverPath": "./portadas/mistress-kanan.jpg",
     "color": "#34d399"
   }
+  {
+    "id": 12,
+    "title": "Classrom of the Elite",
+    "totalEpisodes": 13,
+    "premiereDate": "2026-04-01",
+    "airDay": "wednesday",
+    "airTime": "7:30",
+    "platform": "Crunchyroll",
+    "status": "airing",
+    "coverPath": "./portadas/classroom-elite.jpg",
+    "color": "#ff00c8"
+  }
 ]
