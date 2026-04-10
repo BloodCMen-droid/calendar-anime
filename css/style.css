@@ -426,15 +426,33 @@ main {
   color: var(--text-dim);
 }
 
-.entry-week-badge {
+.anime-entry.watched {
+  border-color: var(--neon-green);
+}
+
+.anime-entry.watched::before {
+  background: var(--neon-green);
+  box-shadow: 0 0 8px var(--neon-green);
+}
+
+.entry-progress {
+  margin-top: 4px;
+}
+
+.episode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-mono);
-  font-size: 8px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(255,255,255,0.04);
+  font-size: 9px;
   color: var(--text-secondary);
-  border: 1px solid var(--border-dim);
-  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+
+.episode-toggle input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  accent-color: var(--neon-green);
 }
 
 /* ── SECTION HEADER ── */

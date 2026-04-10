@@ -45,6 +45,7 @@ let editingId = null;
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
+  await loadProgress();
   removeDuplicates();
   renderAll();
   setupEventListeners();
@@ -374,6 +375,10 @@ function buildAnimeEntry(anime, epWeek, date) {
   el.className = 'anime-entry has-cover';
   el.style.setProperty('--entry-color', anime.color || '#00fff5');
 
+  if (isEpisodeWatched(anime.id, epWeek)) {
+    el.classList.add('watched');
+  }
+
   const coverSrc = getCoverSrc(anime);
   const fallbackCover = buildCoverFallbackSvg(anime.title, anime.color);
   const timeStr = anime.airTime
@@ -386,6 +391,12 @@ function buildAnimeEntry(anime, epWeek, date) {
     <div class="entry-meta">
       <span class="entry-ep">EP ${epWeek}/${anime.totalEpisodes}</span>
       ${timeStr}
+    </div>
+    <div class="entry-progress">
+      <label class="episode-toggle">
+        <input type="checkbox" ${isEpisodeWatched(anime.id, epWeek) ? 'checked' : ''} onchange="toggleEpisode('${anime.id}', ${epWeek})" onclick="event.stopPropagation()">
+        Ep ${epWeek} — Visto
+      </label>
     </div>
   `;
 
@@ -662,8 +673,20 @@ async function resetAndReload() {
   localStorage.removeItem('animeTracker_v2');
   localStorage.removeItem('animeTracker_v1');
   await loadData();
+  await loadProgress();
   renderAll();
   showToast('Datos recargados desde Firebase ✓', 'success');
+}
+
+// ── EPISODE TOGGLE ──
+async function toggleEpisode(animeId, episode) {
+  const currentlyWatched = isEpisodeWatched(animeId, episode);
+  try {
+    await markEpisode(animeId, episode, !currentlyWatched);
+    renderCalendar(); // Re-render to update visuals
+  } catch (error) {
+    showToast('Error updating progress', 'error');
+  }
 }
 
 // Expose globals for inline HTML handlers
@@ -677,3 +700,4 @@ window.confirmDelete = confirmDelete;
 window.prevWeek = prevWeek;
 window.nextWeek = nextWeek;
 window.goToCurrentWeek = goToCurrentWeek;
+window.toggleEpisode = toggleEpisode;
