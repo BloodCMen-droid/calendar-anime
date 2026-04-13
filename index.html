@@ -23,7 +23,6 @@
           <div class="logo-sub">TRACKER // 2026</div>
         </div>
       </a>
-
       <div class="header-actions">
         <button class="btn btn-ghost btn-sm" onclick="goToCurrentWeek()">HOY</button>
         <button class="btn btn-ghost btn-sm" onclick="resetAndReload()" title="Recargar datos de Firebase">↺</button>
@@ -54,33 +53,26 @@
     <!-- WEEK NAVIGATION -->
     <div class="week-nav">
       <button class="week-nav-btn" id="btn-prev" onclick="prevWeek()" title="Semana anterior">‹</button>
-
       <div class="week-info">
         <div class="week-label" id="week-label">SEMANA ACTUAL</div>
         <div class="week-dates" id="week-dates">—</div>
       </div>
-
       <button class="week-nav-btn" id="btn-next" onclick="nextWeek()" title="Semana siguiente">›</button>
     </div>
 
     <!-- CALENDAR GRID -->
-    <div class="calendar-grid" id="calendar-grid">
-      <!-- Rendered by JS -->
-    </div>
+    <div class="calendar-grid" id="calendar-grid"></div>
 
     <!-- ANIME LIST -->
     <div class="section-header">
       <span class="section-title">// LISTA DE ANIMES</span>
       <button class="btn btn-neon btn-sm" onclick="openAddModal()">+ NUEVO</button>
     </div>
-
-    <div class="anime-list" id="anime-list">
-      <!-- Rendered by JS -->
-    </div>
+    <div class="anime-list" id="anime-list"></div>
 
   </main>
 
-  <!-- ── MODAL ── -->
+  <!-- ── MODAL AGREGAR/EDITAR ── -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal">
       <div class="modal-header">
@@ -125,11 +117,6 @@
           </div>
 
           <div class="form-group">
-            <label for="field-platform">PLATAFORMA</label>
-            <input type="text" id="field-platform" placeholder="Crunchyroll, Netflix...">
-          </div>
-
-          <div class="form-group">
             <label for="field-color">COLOR NEON</label>
             <input type="color" id="field-color" value="#00fff5">
           </div>
@@ -146,11 +133,51 @@
 
         </div>
 
+        <!-- ── PLATAFORMAS ── -->
+        <div class="platforms-section">
+          <div class="platforms-header">
+            <span class="platforms-title">// PLATAFORMAS</span>
+            <button type="button" class="btn btn-neon btn-sm" id="btn-add-platform">+ AGREGAR</button>
+          </div>
+          <div class="platforms-hint">
+            Ingresa la URL del episodio 1 y se detectará el patrón automáticamente.<br>
+            <span class="hint-example">Ej: jkanime.com/rezero/1 → detecta jkanime.com/rezero/{ep}</span>
+          </div>
+          <div id="platforms-list">
+            <!-- Rows rendered by JS -->
+          </div>
+        </div>
+
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" onclick="closeModal()">CANCELAR</button>
           <button type="submit" class="btn btn-solid">GUARDAR</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ── WATCH POPUP ── -->
+  <div class="modal-overlay" id="watch-popup-overlay">
+    <div class="modal watch-popup" id="watch-popup">
+      <div class="watch-popup-glow"></div>
+
+      <div class="watch-popup-header">
+        <span class="watch-popup-icon">▶</span>
+        <div>
+          <div class="watch-popup-label">¿DÓNDE QUIERES VERLO?</div>
+          <div class="watch-popup-ep" id="watch-popup-ep">EP 1 — ANIME</div>
+        </div>
+        <button class="modal-close" onclick="closeWatchPopup()">✕</button>
+      </div>
+
+      <div class="watch-popup-platforms" id="watch-popup-platforms">
+        <!-- Platform buttons rendered by JS -->
+      </div>
+
+      <div class="watch-popup-footer">
+        <button class="btn btn-ghost btn-sm" id="watch-popup-edit">✎ EDITAR ANIME</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeWatchPopup()">CERRAR</button>
+      </div>
     </div>
   </div>
 
